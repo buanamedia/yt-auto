@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login & Registrasi - YT Scheduler</title>
+  <title>Login & Registrasi - YT Auto Auto Scheduler</title>
   <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Rigusapps/yt-auto/refs/heads/main/logo%20yt%20auto.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -21,7 +21,7 @@
       <div class="inline-flex items-center justify-center gap-3">
         <img src="https://raw.githubusercontent.com/Rigusapps/yt-auto/refs/heads/main/logo%20yt%20auto.png" alt="YT Auto Logo" class="h-10 w-auto object-contain">
         <div class="text-left">
-          <h1 class="text-xl font-extrabold text-gray-900 tracking-tight leading-none">YT Scheduler</h1>
+          <h1 class="text-xl font-extrabold text-gray-900 tracking-tight leading-none">YT Auto Scheduler</h1>
           <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-widest block mt-0.5">Auto Upload & Manage</span>
         </div>
       </div>
@@ -111,7 +111,7 @@
 
   <!-- FOOTER -->
   <footer class="w-full text-center py-4 text-xs text-gray-500 mt-6">
-    <p>&copy; <script>document.write(new Date().getFullYear())</script> <span class="font-bold text-gray-700">YT Scheduler</span>. All rights reserved.</p>
+    <p>&copy; <script>document.write(new Date().getFullYear())</script> <span class="font-bold text-gray-700">YT Auto Scheduler</span>. All rights reserved.</p>
     <p class="text-[11px] text-gray-400 mt-0.5">Automated YouTube Video Scheduling System</p>
   </footer>
 
@@ -176,7 +176,7 @@
         if (!res.ok) throw new Error(data.error || 'Gagal mendaftar');
 
         const textMessage = encodeURIComponent(
-          `Halo Admin, saya telah mendaftar akun baru di YT Scheduler.\n\n` +
+          `Halo Admin, saya telah mendaftar akun baru di YT Auto Scheduler.\n\n` +
           `*Detail Akun:*\n` +
           `- Username: ${username}\n` +
           `- Email: ${email}\n` +
@@ -216,7 +216,7 @@
         if (!res.ok) throw new Error(data.error || 'Gagal mengajukan reset password');
 
         const textMessage = encodeURIComponent(
-          `Halo Admin, saya mengajukan reset password untuk akun YT Scheduler.\n\n` +
+          `Halo Admin, saya mengajukan reset password untuk akun YT Auto Scheduler.\n\n` +
           `*Username:* ${username}\n\n` +
           `Mohon acc/approve persetujuan reset password saya di dashboard admin. Terima kasih!`
         );
