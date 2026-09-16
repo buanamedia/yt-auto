@@ -76,23 +76,27 @@ async function createDokuPaymentLink({ invoiceNumber, amount, customerName, cust
   }
 }
 
+/**
+ * Verifikasi Signature Fleksibel (Mendukung Payload Dengan / Tanpa Digest)
+ */
 function verifyDokuSignature(headers, body, requestTarget) {
-  const clientId = headers['client-id'];
-  const requestId = headers['request-id'];
-  const requestTimestamp = headers['request-timestamp'];
-  const incomingSignature = headers['signature'];
+  // Ambil Client-Id dari header atau fallback ke env
+  const clientId = headers['client-id'] || headers['Client-Id'] || DOKU_CLIENT_ID;
+  const requestId = headers['request-id'] || headers['Request-Id'];
+  const requestTimestamp = headers['request-timestamp'] || headers['Request-Timestamp'];
+  const incomingSignature = headers['signature'] || headers['Signature'];
 
-  const digest = generateDigest(body);
-  const calculatedSignature = generateSignature(
-    clientId,
-    requestId,
-    requestTimestamp,
-    requestTarget,
-    digest,
-    DOKU_SECRET_KEY
-  );
+  if (!incomingSignature) return false;
 
-  return incomingSignature === calculatedSignature;
+  // 1. Coba hitung Signature DENGAN Digest (Standard Checkout)
+  const digest = (body && Object.keys(body).length > 0) ? generateDigest(body) : null;
+  const sigWithDigest = generateSignature(clientId, requestId, requestTimestamp, requestTarget, digest, DOKU_SECRET_KEY);
+
+  // 2. Coba hitung Signature TANPA Digest (Notifikasi Webhook Tertentu)
+  const sigWithoutDigest = generateSignature(clientId, requestId, requestTimestamp, requestTarget, null, DOKU_SECRET_KEY);
+
+  // Mengembalikan true jika salah satu cocok
+  return incomingSignature === sigWithDigest || incomingSignature === sigWithoutDigest;
 }
 
 module.exports = {
