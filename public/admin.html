@@ -9,7 +9,6 @@
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800">
 
-  <!-- HEADER -->
   <header class="bg-white shadow">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
       <div class="flex items-center space-x-3">
@@ -27,34 +26,33 @@
     </div>
   </header>
 
-  <!-- MAIN CONTENT -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="bg-white rounded-xl shadow-md p-6">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
           <h2 class="text-lg font-bold text-gray-800">Daftar Pengguna</h2>
-          <p class="text-xs text-gray-500">Kelola persetujuan akun, edit kontak, ACC reset password, dan konfirmasi otomatis ke WhatsApp.</p>
+          <p class="text-xs text-gray-500">Kelola persetujuan akun, status pembayaran DOKU, edit kontak, dan ACC reset password.</p>
         </div>
         <button onclick="loadUsers()" class="px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 text-sm font-semibold rounded-lg transition flex items-center gap-1">
           <i class="fa-solid fa-rotate"></i> Muat Ulang Data
         </button>
       </div>
 
-      <!-- TABEL PENGGUNA -->
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-600 uppercase tracking-wider">
               <th class="p-4">Pengguna</th>
               <th class="p-4">Email / WA</th>
+              <th class="p-4">Status Bayar</th>
               <th class="p-4">Status Akun</th>
-              <th class="p-4">Req Reset Pass</th>
+              <th class="p-4">Req Reset</th>
               <th class="p-4 text-center">Aksi Lengkap</th>
             </tr>
           </thead>
           <tbody id="userTableBody" class="divide-y divide-gray-200 text-sm">
             <tr>
-              <td colspan="5" class="p-4 text-center text-gray-400">Memuat data pengguna...</td>
+              <td colspan="6" class="p-4 text-center text-gray-400">Memuat data pengguna...</td>
             </tr>
           </tbody>
         </table>
@@ -62,7 +60,7 @@
     </div>
   </main>
 
-  <!-- MODAL EDIT DATA KONTAK (EMAIL & WHATSAPP) -->
+  <!-- MODAL EDIT DATA KONTAK -->
   <div id="editModal" class="fixed inset-0 bg-black/50 hidden backdrop-blur-sm flex justify-center items-center p-4 z-50">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
       <h3 class="text-lg font-bold text-gray-900 mb-1">Edit Kontak Pengguna</h3>
@@ -92,7 +90,6 @@
   <script>
     let usersData = [];
 
-    // Format nomor WhatsApp agar berawalan kode negara (62)
     function formatWaNumber(phone) {
       if (!phone) return '';
       let clean = phone.replace(/[^0-9]/g, '');
@@ -125,43 +122,47 @@
         usersData = await res.json();
         
         if (usersData.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">Tidak ada pengguna terdaftar.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-400">Tidak ada pengguna terdaftar.</td></tr>`;
           return;
         }
 
         tbody.innerHTML = usersData.map(u => {
           const isApproved = u.is_approved === 1;
+          const isPaid = u.payment_status === 'PAID';
           const hasResetRequest = u.pending_password != null && u.pending_password !== "";
 
           const statusBadge = isApproved 
             ? `<span class="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Aktif</span>`
-            : `<span class="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded-full">Menunggu ACC</span>`;
+            : `<span class="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded-full">Belum Aktif</span>`;
+
+          const paymentBadge = isPaid
+            ? `<span class="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full"><i class="fa-solid fa-circle-check mr-1"></i> LUNAS</span>`
+            : `<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">PENDING</span>`;
 
           const resetBadge = hasResetRequest
             ? `<span class="px-2 py-1 bg-red-100 text-red-600 text-xs font-bold rounded-full animate-pulse">Ada Minta Reset</span>`
             : `<span class="text-xs text-gray-400">-</span>`;
 
-          // Tombol ACC / Nonaktifkan Akun
           const approvalBtn = isApproved
             ? `<button onclick="toggleApproval(${u.id}, 0)" title="Nonaktifkan Akun" class="px-2.5 py-1.5 bg-yellow-100 text-yellow-700 hover:bg-yellow-200 text-xs font-semibold rounded-lg transition flex items-center gap-1"><i class="fa-solid fa-ban"></i> Nonaktifkan</button>`
-            : `<button onclick="toggleApproval(${u.id}, 1)" title="ACC Akun Baru & Kirim WA" class="px-2.5 py-1.5 bg-green-100 text-green-700 hover:bg-green-200 text-xs font-semibold rounded-lg transition flex items-center gap-1"><i class="fa-solid fa-check"></i> ACC Akun</button>`;
+            : `<button onclick="toggleApproval(${u.id}, 1)" title="ACC Akun Manual" class="px-2.5 py-1.5 bg-green-100 text-green-700 hover:bg-green-200 text-xs font-semibold rounded-lg transition flex items-center gap-1"><i class="fa-solid fa-check"></i> ACC Manual</button>`;
 
-          // Tombol ACC Reset Password
           const approveResetBtn = hasResetRequest
-            ? `<button onclick="approveResetPassword(${u.id})" title="ACC Permintaan Reset Password & Kirim WA" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1"><i class="fa-solid fa-key"></i> ACC Reset</button>`
+            ? `<button onclick="approveResetPassword(${u.id})" title="ACC Permintaan Reset Password" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1"><i class="fa-solid fa-key"></i> ACC Reset</button>`
             : '';
 
           return `
             <tr class="hover:bg-gray-50 transition">
               <td class="p-4 font-semibold text-gray-900">${u.username}</td>
               <td class="p-4 text-xs text-gray-600">${u.email || '-'}<br>${u.whatsapp || '-'}</td>
+              <td class="p-4">${paymentBadge}</td>
               <td class="p-4">${statusBadge}</td>
               <td class="p-4">${resetBadge}</td>
               <td class="p-4">
                 <div class="flex items-center justify-center gap-2 flex-wrap">
                   ${approvalBtn}
-                  <button onclick="openEditModal(${u.id})" title="Edit Email & WhatsApp" class="px-2.5 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 text-xs font-semibold rounded-lg transition flex items-center gap-1">
-                    <i class="fa-solid fa-pen-to-square"></i> Edit Kontak
+                  <button onclick="openEditModal(${u.id})" title="Edit Kontak" class="px-2.5 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 text-xs font-semibold rounded-lg transition flex items-center gap-1">
+                    <i class="fa-solid fa-pen-to-square"></i> Edit
                   </button>
                   ${approveResetBtn}
                   ${u.role !== 'admin' ? `
@@ -176,11 +177,10 @@
         }).join('');
 
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Error: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500">Error: ${err.message}</td></tr>`;
       }
     }
 
-    // Modal Edit Kontak
     function openEditModal(userId) {
       const user = usersData.find(u => u.id === userId);
       if (!user) return;
@@ -221,7 +221,6 @@
       }
     }
 
-    // ACC / Nonaktifkan Pendaftaran + Konfirmasi WA
     async function toggleApproval(id, status) {
       const user = usersData.find(u => u.id === id);
       const actionText = status === 1 ? 'menyetujui (ACC)' : 'menonaktifkan';
@@ -236,20 +235,6 @@
         });
 
         if (res.ok) {
-          // Kirim Konfirmasi WA jika di-ACC
-          if (status === 1 && user && user.whatsapp) {
-            const formattedPhone = formatWaNumber(user.whatsapp);
-            const message = encodeURIComponent(
-              `Halo ${user.username},\n\n` +
-              `Selamat! Akun YT Scheduler Anda telah *DISETUJUI / DIAKTIFKAN* oleh Admin.\n\n` +
-              `Sekarang Anda sudah bisa login dan menggunakan aplikasi.\n` +
-              `Terima kasih!`
-            );
-            
-            const waUrl = `https://wa.me/${formattedPhone}?text=${message}`;
-            window.open(waUrl, '_blank');
-          }
-          
           loadUsers();
         }
       } catch (e) {
@@ -257,7 +242,6 @@
       }
     }
 
-    // ACC Reset Password + Konfirmasi WA
     async function approveResetPassword(id) {
       const user = usersData.find(u => u.id === id);
       if (!confirm(`Apakah Anda yakin ingin menyetujui (ACC) perubahan password untuk user ${user ? user.username : ''}?`)) return;
@@ -270,21 +254,6 @@
         
         if (res.ok) {
           alert(data.message);
-
-          // Kirim Konfirmasi WA setelah ACC Reset Password
-          if (user && user.whatsapp) {
-            const formattedPhone = formatWaNumber(user.whatsapp);
-            const message = encodeURIComponent(
-              `Halo ${user.username},\n\n` +
-              `Pengajuan *RESET PASSWORD* Anda telah *DISETUJUI (ACC)* oleh Admin.\n\n` +
-              `Silakan gunakan password baru yang Anda ajukan untuk masuk ke YT Scheduler.\n` +
-              `Terima kasih!`
-            );
-
-            const waUrl = `https://wa.me/${formattedPhone}?text=${message}`;
-            window.open(waUrl, '_blank');
-          }
-
           loadUsers();
         } else {
           alert(data.error);
@@ -294,7 +263,6 @@
       }
     }
 
-    // Hapus User
     async function deleteUser(id) {
       if (!confirm('Apakah Anda yakin ingin menghapus pengguna ini beserta seluruh datanya?')) return;
 
@@ -306,7 +274,6 @@
       }
     }
 
-    // Logout
     async function handleLogout() {
       if (!confirm('Apakah Anda yakin ingin keluar?')) return;
       await fetch('/api/logout', { method: 'POST' });
