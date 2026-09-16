@@ -58,7 +58,6 @@ async function initDb() {
       )
     `);
 
-    // TABEL PENGATURAN BIAYA APLIKASI
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
@@ -66,7 +65,6 @@ async function initDb() {
       )
     `);
 
-    // Inisialisasi harga default (Rp 100.000) jika belum ada
     await turso.execute(`
       INSERT OR IGNORE INTO settings (key, value) VALUES ('registration_fee', '100000')
     `);
@@ -80,14 +78,7 @@ async function initDb() {
       if (!uCols.includes('payment_status')) await turso.execute("ALTER TABLE users ADD COLUMN payment_status TEXT DEFAULT 'PENDING'");
       if (!uCols.includes('invoice_number')) await turso.execute("ALTER TABLE users ADD COLUMN invoice_number TEXT");
       if (!uCols.includes('payment_url')) await turso.execute("ALTER TABLE users ADD COLUMN payment_url TEXT");
-
-      const qInfo = await turso.execute("PRAGMA table_info(queue)");
-      const qCols = qInfo.rows.map(c => c.name);
-      if (!qCols.includes('user_id')) await turso.execute("ALTER TABLE queue ADD COLUMN user_id INTEGER");
-
-      const cInfo = await turso.execute("PRAGMA table_info(channels)");
-      const cCols = cInfo.rows.map(c => c.name);
-      if (!cCols.includes('user_id')) await turso.execute("ALTER TABLE channels ADD COLUMN user_id INTEGER");
+      if (!uCols.includes('pending_password')) await turso.execute("ALTER TABLE users ADD COLUMN pending_password TEXT");
     } catch (migErr) {
       console.error("[DB Migration Warning]:", migErr.message || migErr);
     }
