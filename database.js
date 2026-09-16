@@ -58,6 +58,19 @@ async function initDb() {
       )
     `);
 
+    // TABEL PENGATURAN BIAYA APLIKASI
+    await turso.execute(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
+
+    // Inisialisasi harga default (Rp 100.000) jika belum ada
+    await turso.execute(`
+      INSERT OR IGNORE INTO settings (key, value) VALUES ('registration_fee', '100000')
+    `);
+
     try {
       const uInfo = await turso.execute("PRAGMA table_info(users)");
       const uCols = uInfo.rows.map(c => c.name);
@@ -87,5 +100,4 @@ async function initDb() {
   }
 }
 
-// Export turso dan alias db
 module.exports = { turso, db: turso, initDb };
