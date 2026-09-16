@@ -10,16 +10,10 @@ const DOKU_BASE_URL = IS_PRODUCTION
   ? 'https://api.doku.com'
   : 'https://api-sandbox.doku.com';
 
-/**
- * Generate Digest (SHA256 base64) dari Request Body
- */
 function generateDigest(body) {
   return crypto.createHash('sha256').update(JSON.stringify(body)).digest('base64');
 }
 
-/**
- * Generate Signature HMAC-SHA256 khusus DOKU API
- */
 function generateSignature(clientId, requestId, requestTimestamp, requestTarget, digest, secretKey) {
   let rawSignature = `Client-Id:${clientId}\n` +
                      `Request-Id:${requestId}\n` +
@@ -35,10 +29,7 @@ function generateSignature(clientId, requestId, requestTimestamp, requestTarget,
   return 'HMACSHA256=' + hmac.digest('base64');
 }
 
-/**
- * Meminta URL Pembayaran ke DOKU (Checkout API)
- */
-async function createDokuPaymentLink({ invoiceNumber, amount, customerName, customerEmail }) {
+async function createDokuPaymentLink({ invoiceNumber, amount, customerName, customerEmail, callbackUrl }) {
   const requestTarget = '/checkout/v1/payment';
   const requestId = `REQ-${Date.now()}`;
   const requestTimestamp = new Date().toISOString().slice(0, 19) + 'Z';
@@ -46,10 +37,11 @@ async function createDokuPaymentLink({ invoiceNumber, amount, customerName, cust
   const payload = {
     order: {
       invoice_number: invoiceNumber,
-      amount: amount
+      amount: amount,
+      callback_url: callbackUrl
     },
     payment: {
-      payment_due_date: 60 // Expired dalam 60 menit
+      payment_due_date: 60
     },
     customer: {
       name: customerName,
@@ -84,9 +76,6 @@ async function createDokuPaymentLink({ invoiceNumber, amount, customerName, cust
   }
 }
 
-/**
- * Verifikasi Signature Webhook Notification dari DOKU
- */
 function verifyDokuSignature(headers, body, requestTarget) {
   const clientId = headers['client-id'];
   const requestId = headers['request-id'];
