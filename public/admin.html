@@ -26,7 +26,25 @@
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    
+    <!-- CARD PENGATURAN BIAYA PENDAFTARAN -->
+    <div class="bg-white rounded-xl shadow-md p-6">
+      <h2 class="text-lg font-bold text-gray-800 mb-1">Pengaturan Biaya Pendaftaran</h2>
+      <p class="text-xs text-gray-500 mb-4">Tentukan nominal yang harus dibayar oleh pengguna baru saat mendaftar via DOKU Gateway.</p>
+
+      <form onsubmit="handleSaveSettings(event)" class="flex flex-col sm:flex-row gap-3 items-end max-w-md">
+        <div class="w-full">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Biaya Pendaftaran (IDR)</label>
+          <input type="number" id="settingFee" required min="10000" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Contoh: 100000">
+        </div>
+        <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap">
+          Simpan Biaya
+        </button>
+      </form>
+    </div>
+
+    <!-- TABEL DAFTAR PENGGUNA -->
     <div class="bg-white rounded-xl shadow-md p-6">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
@@ -90,15 +108,6 @@
   <script>
     let usersData = [];
 
-    function formatWaNumber(phone) {
-      if (!phone) return '';
-      let clean = phone.replace(/[^0-9]/g, '');
-      if (clean.startsWith('0')) {
-        clean = '62' + clean.slice(1);
-      }
-      return clean;
-    }
-
     document.addEventListener('DOMContentLoaded', async () => {
       try {
         const res = await fetch('/api/me');
@@ -107,11 +116,44 @@
           window.location.href = '/';
           return;
         }
+        loadSettings();
         loadUsers();
       } catch (e) {
         window.location.href = '/';
       }
     });
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/admin/settings');
+        const data = await res.json();
+        if (data.registration_fee) {
+          document.getElementById('settingFee').value = data.registration_fee;
+        }
+      } catch (e) {
+        console.error('Gagal memuat pengaturan:', e);
+      }
+    }
+
+    async function handleSaveSettings(e) {
+      e.preventDefault();
+      const fee = document.getElementById('settingFee').value;
+
+      try {
+        const res = await fetch('/api/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registration_fee: fee })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Gagal menyimpan');
+
+        alert(data.message);
+      } catch (err) {
+        alert(err.message);
+      }
+    }
 
     async function loadUsers() {
       const tbody = document.getElementById('userTableBody');
