@@ -16,13 +16,10 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Config Cloudinary
 cloudinary.config();
 
-// --- PROXY SETTING UNTUK CLOUD DEPLOYMENT ---
 app.set('trust proxy', 1);
 
-// --- MIDDLEWARES ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -39,7 +36,6 @@ app.use(session({
   }
 }));
 
-// Folder uploads lokal sementara
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -142,7 +138,7 @@ async function removeCloudinaryFile(filePath) {
   }
 }
 
-// --- AUTH ROUTES ---
+// --- AUTH & REGISTER ROUTES ---
 
 app.post('/api/request-reset-password', async (req, res) => {
   try {
@@ -187,16 +183,24 @@ app.post('/api/register', async (req, res) => {
     const isApproved = count === 0 ? 1 : 0;
 
     const invoiceNumber = `INV-${Date.now()}`;
-    const HARGA_BERLANGGANAN = 150000; // Ubah harga produk di sini jika perlu
+
+    // Ambil nominal harga dari database settings
+    const feeRes = await turso.execute("SELECT value FROM settings WHERE key = 'registration_fee'");
+    const registrationFee = feeRes.rows.length > 0 ? Number(feeRes.rows[0].value) : 100000;
+
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const callbackUrl = `${protocol}://${host}/login.html?status=success`;
 
     let paymentUrl = null;
 
     if (role !== 'admin') {
       paymentUrl = await createDokuPaymentLink({
         invoiceNumber,
-        amount: HARGA_BERLANGGANAN,
+        amount: registrationFee,
         customerName: username,
-        customerEmail: email
+        customerEmail: email,
+        callbackUrl
       });
     }
 
@@ -223,7 +227,7 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// WEBHOOK NOTIFIKASI OTOMATIS DARI DOKU
+// WEBHOOK DOKU (OTOMATIS APPROVE AKUN SETELAH BAYAR)
 app.post('/api/doku/notification', async (req, res) => {
   try {
     const requestTarget = '/api/doku/notification';
@@ -239,7 +243,7 @@ app.post('/api/doku/notification', async (req, res) => {
     if (transaction && (transaction.status === 'SUCCESS' || transaction.status === 'PAID')) {
       const invoiceNumber = order.invoice_number;
 
-      // UPDATE PEMBAYARAN & AKTIFKAN AKUN OTOMATIS
+      // Otomatis ubah payment_status ke PAID dan is_approved ke 1 (Aktif)
       await turso.execute({
         sql: `UPDATE users SET payment_status = 'PAID', is_approved = 1 WHERE invoice_number = ?`,
         args: [invoiceNumber]
@@ -271,7 +275,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     if (user.role !== 'admin' && user.is_approved !== 1) {
-      return res.status(403).json({ error: 'Akun Anda belum disetujui/diaktifkan atau pembayaran belum seleseai.' });
+      return res.status(403).json({ error: 'Akun Anda belum aktif. Silakan selesaikan pembayaran terlebih dahulu.' });
     }
 
     req.session.user = { id: user.id, username: user.username, role: user.role };
@@ -288,6 +292,36 @@ app.get('/api/me', (req, res) => {
 app.post('/api/logout', (req, res) => {
   req.session.destroy();
   res.json({ success: true });
+});
+
+// --- ADMIN SETTINGS ROUTES (PENGATURAN BIAYA) ---
+
+app.get('/api/admin/settings', requireAdmin, async (req, res) => {
+  try {
+    const feeRes = await turso.execute("SELECT value FROM settings WHERE key = 'registration_fee'");
+    const fee = feeRes.rows.length > 0 ? feeRes.rows[0].value : '100000';
+    res.json({ registration_fee: fee });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/settings', requireAdmin, async (req, res) => {
+  try {
+    const { registration_fee } = req.body;
+    if (!registration_fee || isNaN(registration_fee)) {
+      return res.status(400).json({ error: 'Nominal biaya tidak valid!' });
+    }
+
+    await turso.execute({
+      sql: "INSERT INTO settings (key, value) VALUES ('registration_fee', ?) ON CONFLICT(key) DO UPDATE SET value = ?",
+      args: [String(registration_fee), String(registration_fee)]
+    });
+
+    res.json({ success: true, message: 'Biaya pendaftaran berhasil diperbarui!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- GOOGLE OAUTH ROUTES ---
@@ -509,7 +543,7 @@ app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
   }
 });
 
-// --- ADMIN SPECIFIC ROUTES ---
+// --- ADMIN USERS ROUTES ---
 
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
