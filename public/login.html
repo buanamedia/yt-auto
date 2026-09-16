@@ -118,12 +118,25 @@
   <script>
     const ADMIN_WA_NUMBER = "6281234567890";
 
-    document.addEventListener('DOMContentLoaded', () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('status') === 'success') {
-        document.getElementById('statusAlert').classList.remove('hidden');
-      }
-    });
+    document.addEventListener('DOMContentLoaded', async () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const inv = urlParams.get('inv');
+  
+  if (urlParams.get('status') === 'success') {
+    document.getElementById('statusAlert').classList.remove('hidden');
+    
+    // Auto Trigger Konfirmasi Aktif
+    if (inv) {
+      try {
+        await fetch('/api/confirm-payment-redirect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoiceNumber: inv })
+        });
+      } catch (e) {}
+    }
+  }
+});
 
     function switchTab(tab) {
       const loginForm = document.getElementById('loginForm');
