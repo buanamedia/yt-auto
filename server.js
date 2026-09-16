@@ -9,6 +9,7 @@ const cloudinary = require('cloudinary').v2;
 const { turso, initDb } = require('./database');
 const { getAuthUrl, handleCallback } = require('./youtubeService');
 const initScheduler = require('./scheduler');
+const { createDokuPaymentLink, verifyDokuSignature } = require('./dokuService');
 
 require('dotenv').config();
 
@@ -143,7 +144,6 @@ async function removeCloudinaryFile(filePath) {
 
 // --- AUTH ROUTES ---
 
-// USER MENGAJUKAN RESET PASSWORD (PENDING ACC ADMIN)
 app.post('/api/request-reset-password', async (req, res) => {
   try {
     const { username, newPassword } = req.body;
@@ -153,12 +153,9 @@ app.post('/api/request-reset-password', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Cek ketersediaan kolom pending_password
     try {
       await turso.execute("ALTER TABLE users ADD COLUMN pending_password TEXT");
-    } catch (e) {
-      // Abaikan jika kolom sudah ada
-    }
+    } catch (e) {}
 
     const result = await turso.execute({
       sql: 'UPDATE users SET pending_password = ? WHERE username = ?',
@@ -189,21 +186,73 @@ app.post('/api/register', async (req, res) => {
     const role = count === 0 ? 'admin' : 'user';
     const isApproved = count === 0 ? 1 : 0;
 
+    const invoiceNumber = `INV-${Date.now()}`;
+    const HARGA_BERLANGGANAN = 150000; // Ubah harga produk di sini jika perlu
+
+    let paymentUrl = null;
+
+    if (role !== 'admin') {
+      paymentUrl = await createDokuPaymentLink({
+        invoiceNumber,
+        amount: HARGA_BERLANGGANAN,
+        customerName: username,
+        customerEmail: email
+      });
+    }
+
     await turso.execute({
-      sql: `INSERT INTO users (username, password, email, whatsapp, role, is_approved) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [username, hashedPassword, email, whatsapp, role, isApproved]
+      sql: `INSERT INTO users (username, password, email, whatsapp, role, is_approved, payment_status, invoice_number, payment_url) 
+            VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)`,
+      args: [username, hashedPassword, email, whatsapp, role, isApproved, invoiceNumber, paymentUrl]
     });
 
-    const msg = role === 'admin' 
-      ? 'Pendaftaran Admin berhasil! Silakan login.' 
-      : 'Pendaftaran berhasil! Akun Anda sedang menunggu persetujuan Admin.';
+    if (role === 'admin') {
+      return res.json({ message: 'Pendaftaran Admin berhasil! Silakan login.' });
+    }
 
-    res.json({ message: msg });
+    res.json({
+      message: 'Pendaftaran berhasil! Mengalihkan ke pembayaran...',
+      paymentUrl: paymentUrl
+    });
+
   } catch (err) {
     if (err.message && err.message.includes('UNIQUE')) {
       return res.status(400).json({ error: 'Username sudah digunakan.' });
     }
     res.status(500).json({ error: err.message });
+  }
+});
+
+// WEBHOOK NOTIFIKASI OTOMATIS DARI DOKU
+app.post('/api/doku/notification', async (req, res) => {
+  try {
+    const requestTarget = '/api/doku/notification';
+    
+    const isValid = verifyDokuSignature(req.headers, req.body, requestTarget);
+    if (!isValid) {
+      console.warn('[DOKU Webhook] Request ditolak: Signature tidak valid!');
+      return res.status(400).send('Invalid Signature');
+    }
+
+    const { order, transaction } = req.body;
+
+    if (transaction && (transaction.status === 'SUCCESS' || transaction.status === 'PAID')) {
+      const invoiceNumber = order.invoice_number;
+
+      // UPDATE PEMBAYARAN & AKTIFKAN AKUN OTOMATIS
+      await turso.execute({
+        sql: `UPDATE users SET payment_status = 'PAID', is_approved = 1 WHERE invoice_number = ?`,
+        args: [invoiceNumber]
+      });
+
+      console.log(`✅ [DOKU Webhook] Pembayaran Sukses! Akun Invoice ${invoiceNumber} telah Aktif.`);
+      return res.status(200).send('OK');
+    }
+
+    res.status(200).send('IGNORED');
+  } catch (err) {
+    console.error('[DOKU Webhook Error]:', err.message);
+    res.status(500).send('Internal Server Error');
   }
 });
 
@@ -222,7 +271,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     if (user.role !== 'admin' && user.is_approved !== 1) {
-      return res.status(403).json({ error: 'Akun Anda belum disetujui/diaktifkan oleh Admin.' });
+      return res.status(403).json({ error: 'Akun Anda belum disetujui/diaktifkan atau pembayaran belum seleseai.' });
     }
 
     req.session.user = { id: user.id, username: user.username, role: user.role };
@@ -464,10 +513,9 @@ app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
 
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
-    // Memastikan kolom pending_password terdeteksi
     try { await turso.execute("ALTER TABLE users ADD COLUMN pending_password TEXT"); } catch(e){}
 
-    const usersRes = await turso.execute('SELECT id, username, email, whatsapp, role, is_approved, pending_password, created_at FROM users');
+    const usersRes = await turso.execute('SELECT id, username, email, whatsapp, role, is_approved, payment_status, invoice_number, pending_password, created_at FROM users');
     res.json(usersRes.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -487,7 +535,6 @@ app.post('/api/admin/approve/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// ADMIN ACC RESET PASSWORD USER
 app.post('/api/admin/approve-reset-password/:id', requireAdmin, async (req, res) => {
   try {
     const targetUserId = req.params.id;
@@ -502,7 +549,6 @@ app.post('/api/admin/approve-reset-password/:id', requireAdmin, async (req, res)
       return res.status(400).json({ error: 'Tidak ada permintaan reset password untuk pengguna ini.' });
     }
 
-    // Pindahkan pending_password ke password utama, lalu hapus pending_password
     await turso.execute({
       sql: 'UPDATE users SET password = pending_password, pending_password = NULL WHERE id = ?',
       args: [targetUserId]
@@ -514,7 +560,6 @@ app.post('/api/admin/approve-reset-password/:id', requireAdmin, async (req, res)
   }
 });
 
-// UPDATE EMAIL & WHATSAPP (ADMIN)
 app.put('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     const { email, whatsapp } = req.body;
