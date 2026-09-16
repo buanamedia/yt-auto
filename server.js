@@ -188,9 +188,8 @@ app.post('/api/register', async (req, res) => {
     const feeRes = await turso.execute("SELECT value FROM settings WHERE key = 'registration_fee'");
     const registrationFee = feeRes.rows.length > 0 ? Number(feeRes.rows[0].value) : 100000;
 
-    const protocol = req.protocol;
-    const host = req.get('host');
-    const callbackUrl = `${protocol}://${host}/login.html?status=success`;
+    // Direct Return URL Setelah Pembayaran Sukses DOKU
+    const callbackUrl = `https://yt-auto.buanamedia.my.id/login.html?status=success`;
 
     let paymentUrl = null;
 
@@ -227,11 +226,9 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// WEBHOOK DOKU (OTOMATIS APPROVE AKUN SETELAH BAYAR)
-app.post('/api/doku/notification', async (req, res) => {
+// HANDLER FUNGSI WEBHOOK DOKU
+async function handleDokuWebhook(req, res, requestTarget) {
   try {
-    const requestTarget = '/api/doku/notification';
-    
     const isValid = verifyDokuSignature(req.headers, req.body, requestTarget);
     if (!isValid) {
       console.warn('[DOKU Webhook] Request ditolak: Signature tidak valid!');
@@ -243,7 +240,6 @@ app.post('/api/doku/notification', async (req, res) => {
     if (transaction && (transaction.status === 'SUCCESS' || transaction.status === 'PAID')) {
       const invoiceNumber = order.invoice_number;
 
-      // Otomatis ubah payment_status ke PAID dan is_approved ke 1 (Aktif)
       await turso.execute({
         sql: `UPDATE users SET payment_status = 'PAID', is_approved = 1 WHERE invoice_number = ?`,
         args: [invoiceNumber]
@@ -258,7 +254,11 @@ app.post('/api/doku/notification', async (req, res) => {
     console.error('[DOKU Webhook Error]:', err.message);
     res.status(500).send('Internal Server Error');
   }
-});
+}
+
+// ENDPOINT WEBHOOK DOKU (MENDUKUNG KEDUA PATH ALAMAT URL)
+app.post('/api/doku/notification', (req, res) => handleDokuWebhook(req, res, '/api/doku/notification'));
+app.post('/api/webhook/doku', (req, res) => handleDokuWebhook(req, res, '/api/webhook/doku'));
 
 app.post('/api/login', async (req, res) => {
   try {
@@ -294,7 +294,7 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// --- ADMIN SETTINGS ROUTES (PENGATURAN BIAYA) ---
+// --- ADMIN SETTINGS ROUTES ---
 
 app.get('/api/admin/settings', requireAdmin, async (req, res) => {
   try {
