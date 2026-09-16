@@ -22,6 +22,9 @@ async function initDb() {
         whatsapp TEXT,
         role TEXT DEFAULT 'user',
         is_approved INTEGER DEFAULT 0,
+        payment_status TEXT DEFAULT 'PENDING',
+        invoice_number TEXT,
+        payment_url TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -61,6 +64,9 @@ async function initDb() {
       if (!uCols.includes('email')) await turso.execute("ALTER TABLE users ADD COLUMN email TEXT");
       if (!uCols.includes('whatsapp')) await turso.execute("ALTER TABLE users ADD COLUMN whatsapp TEXT");
       if (!uCols.includes('is_approved')) await turso.execute("ALTER TABLE users ADD COLUMN is_approved INTEGER DEFAULT 0");
+      if (!uCols.includes('payment_status')) await turso.execute("ALTER TABLE users ADD COLUMN payment_status TEXT DEFAULT 'PENDING'");
+      if (!uCols.includes('invoice_number')) await turso.execute("ALTER TABLE users ADD COLUMN invoice_number TEXT");
+      if (!uCols.includes('payment_url')) await turso.execute("ALTER TABLE users ADD COLUMN payment_url TEXT");
 
       const qInfo = await turso.execute("PRAGMA table_info(queue)");
       const qCols = qInfo.rows.map(c => c.name);
